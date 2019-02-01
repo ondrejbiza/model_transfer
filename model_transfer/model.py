@@ -1,5 +1,7 @@
+import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D         # don't delete this, necessary for 3d projection
+from sklearn.cluster import KMeans
 import tensorflow as tf
 
 
@@ -12,7 +14,7 @@ class Model:
         self.discount = discount
 
         self.features_t = None
-        self.reward_t = None
+        self.rewards_t = None
         self.successor_t = None
         self.successor_pi_t = None
         self.reward_loss_t = None
@@ -23,6 +25,46 @@ class Model:
 
         self.build_model()
         self.build_training()
+
+    def train_step(self):
+
+        loss, _ = self.session.run([self.loss_t, self.train_op])
+        return loss
+
+    def show_feature_space(self):
+
+        features = self.session.run(self.features_t)
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(features[:, 0], features[:, 1], features[:, 2])
+
+        plt.show()
+
+    def k_means_update(self):
+
+        features = self.session.run(self.features_t)
+        rewards = self.session.run(self.rewards_t)
+        successor = self.session.run(self.successor_t)
+
+        k_means = KMeans(n_clusters=self.env.NUM_FEATURES, random_state=0)
+        k_means.fit(features)
+
+        m = k_means.cluster_centers_.transpose((1, 0))
+        m_inverse = np.linalg.inv(m)
+
+        new_features = np.matmul(features, m_inverse)
+        new_rewards = np.matmul(m, rewards)
+
+        new_successor_1 = np.matmul(m, successor)
+        new_successor_2 = [np.matmul(new_successor_1[:, i], m_inverse) for i in range(self.env.NUM_ACTIONS)] # TODO: is this correct?
+        new_successor = np.stack(new_successor_2, axis=1)
+
+        self.session.run([self.assign_features_op, self.assign_rewards_op, self.assign_successor_op], feed_dict={
+            self.new_features_pl: new_features,
+            self.new_rewards_pl: new_rewards,
+            self.new_successor_pl: new_successor
+        })
 
     def build_model(self):
 
@@ -40,6 +82,17 @@ class Model:
             "successor", shape=(self.env.NUM_FEATURES, self.env.NUM_ACTIONS),
             initializer=tf.random_uniform_initializer(minval=0, maxval=1, dtype=tf.float32)
         )
+
+        self.new_features_pl = tf.placeholder(tf.float32, shape=(self.env.NUM_STATES, self.env.NUM_FEATURES),
+                                              name="new_features_pl")
+        self.new_rewards_pl = tf.placeholder(tf.float32, shape=(self.env.NUM_FEATURES, self.env.NUM_ACTIONS),
+                                             name="new_rewards_pl")
+        self.new_successor_pl = tf.placeholder(tf.float32, shape=(self.env.NUM_FEATURES, self.env.NUM_ACTIONS),
+                                               name="new_successor_pl")
+
+        self.assign_features_op = tf.assign(self.features_t, self.new_features_pl)
+        self.assign_rewards_op = tf.assign(self.rewards_t, self.new_rewards_pl)
+        self.assign_successor_op = tf.assign(self.successor_t, self.new_successor_pl)
 
         self.successor_pi_t = tf.reduce_mean(self.successor_t, axis=1)
 
@@ -70,21 +123,6 @@ class Model:
         self.loss_t = self.reward_loss_t + self.alpha * self.successor_loss_t
 
         self.train_op = tf.train.AdamOptimizer(0.001).minimize(self.loss_t)
-
-    def train_step(self):
-
-        loss, _ = self.session.run([self.loss_t, self.train_op])
-        return loss
-
-    def show_feature_space(self):
-
-        features = self.session.run(self.features_t)
-
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(features[:, 0], features[:, 1], features[:, 2])
-
-        plt.show()
 
     def start_session(self):
 
