@@ -11,6 +11,14 @@ class Model:
         self.alpha = alpha
         self.discount = discount
 
+        self.features_t = None
+        self.reward_t = None
+        self.successor_t = None
+        self.successor_pi_t = None
+        self.reward_loss_t = None
+        self.successor_loss_t = None
+        self.loss_t = None
+        self.train_op = None
         self.session = None
 
         self.build_model()
@@ -54,8 +62,8 @@ class Model:
 
         self.successor_loss_t = tf.reduce_mean(
             [tf.reduce_sum(
-                self.features_t + (self.discount * middle2)[:, i:i+1] -
-                tf.matmul(self.features_t, self.successor_t)[:,i:i+1]
+                self.features_t + (self.discount * middle2)[:, i: i + 1] -
+                tf.matmul(self.features_t, self.successor_t)[:, i: i + 1]
             ) for i in range(self.env.NUM_ACTIONS)]
         )
 
