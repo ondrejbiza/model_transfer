@@ -57,7 +57,7 @@ class Model:
         new_rewards = np.matmul(m, rewards)
 
         new_successor_1 = np.matmul(m, successor)
-        new_successor_2 = [np.matmul(new_successor_1[:, i], m_inverse) for i in range(self.env.NUM_ACTIONS)] # TODO: is this correct?
+        new_successor_2 = [np.matmul(new_successor_1[:, i], m_inverse) for i in range(self.env.NUM_ACTIONS)]
         new_successor = np.stack(new_successor_2, axis=1)
 
         self.session.run([self.assign_features_op, self.assign_rewards_op, self.assign_successor_op], feed_dict={
@@ -72,6 +72,7 @@ class Model:
             "features", shape=(self.env.NUM_STATES, self.env.NUM_FEATURES),
             initializer=tf.random_uniform_initializer(minval=0, maxval=1, dtype=tf.float32)
         )
+        self.features_squashed_t = tf.nn.sigmoid(self.features_t)
 
         self.rewards_t = tf.get_variable(
             "rewards", shape=(self.env.NUM_FEATURES, self.env.NUM_ACTIONS),
@@ -100,12 +101,12 @@ class Model:
 
         self.reward_loss_t = tf.reduce_mean(
             tf.reduce_sum(
-                tf.square(tf.matmul(self.features_t, self.rewards_t, name="o1") - self.env.r), axis=0
+                tf.square(tf.matmul(self.features_squashed_t, self.rewards_t, name="o1") - self.env.r), axis=0
             ), axis=0
         )
 
         middle1 = tf.stack(
-            [tf.matmul(self.env.p[:, :, i], self.features_t) for i in range(self.env.NUM_ACTIONS)], axis=2
+            [tf.matmul(self.env.p[:, :, i], self.features_squashed_t) for i in range(self.env.NUM_ACTIONS)], axis=2
         )
 
         middle2 = tf.stack(
@@ -115,8 +116,8 @@ class Model:
 
         self.successor_loss_t = tf.reduce_mean(
             [tf.reduce_sum(
-                self.features_t + (self.discount * middle2)[:, i: i + 1] -
-                tf.matmul(self.features_t, self.successor_t)[:, i: i + 1]
+                self.features_squashed_t + (self.discount * middle2)[:, i: i + 1] -
+                tf.matmul(self.features_squashed_t, self.successor_t)[:, i: i + 1]
             ) for i in range(self.env.NUM_ACTIONS)]
         )
 
