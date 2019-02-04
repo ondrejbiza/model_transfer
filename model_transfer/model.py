@@ -7,15 +7,23 @@ import tensorflow as tf
 
 class Model:
 
-    def __init__(self, env, alpha=0.001, discount=0.9):
+    def __init__(self, env, alpha=0.001, discount=0.9, learning_rate=0.001):
 
         self.env = env
         self.alpha = alpha
         self.discount = discount
+        self.learning_rate = learning_rate
 
         self.features_t = None
+        self.features_squashed_t = None
         self.rewards_t = None
         self.successor_t = None
+        self.new_features_pl = None
+        self.new_rewards_pl = None
+        self.new_successor_pl = None
+        self.assign_features_op = None
+        self.assign_rewards_op = None
+        self.assign_successor_op = None
         self.successor_pi_t = None
         self.reward_loss_t = None
         self.successor_loss_t = None
@@ -43,9 +51,7 @@ class Model:
 
     def k_means_update(self):
 
-        features = self.session.run(self.features_t)
-        rewards = self.session.run(self.rewards_t)
-        successor = self.session.run(self.successor_t)
+        features, rewards, successor = self.session.run([self.features_t, self.rewards_t, self.successor_t])
 
         k_means = KMeans(n_clusters=self.env.NUM_FEATURES, random_state=0)
         k_means.fit(features)
@@ -65,6 +71,21 @@ class Model:
             self.new_rewards_pl: new_rewards,
             self.new_successor_pl: new_successor
         })
+
+    def policy_evaluation(self, policy, threshold=0.001):
+
+        features, rewards, successor, successor_pi = self.session.run(
+            [self.features_t, self.rewards_t, self.successor_t, self.successor_pi_t]
+        )
+
+        transitions = np.matmul((successor - np.identity(len(successor))), np.linalg.inv(successor_pi)) / self.discount
+
+        prev_v = None
+        v = None
+
+        while prev_v is None or np.abs(prev_v - v) > threshold:
+
+            q = rewards + self.discount
 
     def build_model(self):
 
@@ -123,7 +144,7 @@ class Model:
 
         self.loss_t = self.reward_loss_t + self.alpha * self.successor_loss_t
 
-        self.train_op = tf.train.AdamOptimizer(0.001).minimize(self.loss_t)
+        self.train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss_t)
 
     def start_session(self):
 
