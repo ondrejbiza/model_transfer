@@ -52,12 +52,13 @@ class Model:
 
     def k_means_update(self):
 
-        features, rewards, successor = self.session.run([self.features_squashed_t, self.rewards_t, self.successor_t])
+        features, rewards, successor = self.session.run([self.features_t, self.rewards_t, self.successor_t])
 
         k_means = KMeans(n_clusters=self.env.NUM_FEATURES, random_state=0)
         k_means.fit(features)
 
         m = k_means.cluster_centers_.transpose((1, 0))
+
         m_inverse = np.linalg.inv(m)
 
         new_features = np.matmul(features, m_inverse)
@@ -99,14 +100,13 @@ class Model:
                  for i in range(self.env.NUM_ACTIONS)],
                 axis=-1
             )
-            print(q)
 
             v = np.matmul(np.linalg.pinv(features), np.sum(
                 [np.matmul(np.matmul(diag_policy[:, :, i], features), q[:, i]) for i in range(self.env.NUM_ACTIONS)],
                 axis=0
             ))
 
-        diff = np.max(np.matmul(features, v) - values)
+        diff = np.max(np.abs(np.matmul(features, v) - values))
 
         return diff
 
@@ -137,7 +137,7 @@ class Model:
             name="new_successor_pl"
         )
 
-        self.assign_features_op = tf.assign(self.features_t, utils.logit(self.new_features_pl))
+        self.assign_features_op = tf.assign(self.features_t, self.new_features_pl)
         self.assign_rewards_op = tf.assign(self.rewards_t, self.new_rewards_pl)
         self.assign_successor_op = tf.assign(self.successor_t, self.new_successor_pl)
 
@@ -175,7 +175,7 @@ class Model:
 
         self.successor_loss_t = tf.reduce_mean(
             tf.reduce_sum(
-                term1 + self.discount * term2 - term3, axis=[0, 1]
+                tf.square(term1 + self.discount * term2 - term3), axis=[0, 1]
             ), axis=0
         )
 

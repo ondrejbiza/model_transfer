@@ -8,17 +8,17 @@ model.start_session()
 
 for i in range(200000):
 
-    if i % 40000 == 0:
+    if i % 1000 == 0 and i > 0:
+        print("step {:d}".format(i))
 
-        print("step {:d}".format(i + 1))
+    if i % 40000 == 0:
 
         model.show_feature_space()
 
         if i > 0:
             model.k_means_update()
+            model.show_feature_space()
             print(model.policy_evaluation(env.uniform_policy, env.uniform_policy_values))
-
-        model.show_feature_space()
 
     model.train_step()
 
