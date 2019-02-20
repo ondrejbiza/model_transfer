@@ -1,25 +1,26 @@
+import matplotlib.pyplot as plt
 from ..gridworld import GridWorld
 from ..model import Model
 
 
 env = GridWorld()
-model = Model(env)
+model = Model(env, alpha=0.01, learning_rate=0.1, discount=0.9)
 model.start_session()
 
-for i in range(200000):
+losses = []
 
-    if i % 1000 == 0 and i > 0:
+for i in range(1001):
+
+    if i == 300 or i == 700 or i == 1000:
+
         print("step {:d}".format(i))
-
-    if i % 40000 == 0:
-
+        print(model.policy_evaluation(env.uniform_policy, env.uniform_policy_values))
         model.show_feature_space()
 
-        if i > 0:
-            model.k_means_update()
-            model.show_feature_space()
-            print(model.policy_evaluation(env.uniform_policy, env.uniform_policy_values))
+    loss = model.train_step()
+    losses.append(loss)
 
-    model.train_step()
+plt.semilogy(range(1, len(losses) + 1), losses)
+plt.show()
 
 model.stop_session()
